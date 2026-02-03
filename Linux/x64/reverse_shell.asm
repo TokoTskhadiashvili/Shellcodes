@@ -69,7 +69,7 @@ _start:
     syscall
 
     mov rax, 0x3B                   ; execve("/bin/bash", NULL, NULL)
-    lea rdi, bash                   ; "/bin/bash"
+    lea rdi, [bash]                 ; "/bin/bash"
     xor rsi, rsi                    ; NULL
     xor rdx, rdx                    ; NULL
     syscall
@@ -82,3 +82,4 @@ _end:
     mov rax, 0x3C                   ; exit(0)
     mov rdi, 0x00                   ; 0
     syscall
+
