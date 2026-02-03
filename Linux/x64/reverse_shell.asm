@@ -12,8 +12,8 @@ section .bss
 section .data
     sockaddr istruc sockaddr_in
         at sockaddr_in.sin_family, dw 2         ; AF_INET
-        at sockaddr_in.sin_port, dw 0x1F90      ; 8080 (CHANGE_ME)
-        at sockaddr_in.sin_addr, dd 0           ; localhost (CHANGE_ME)
+        at sockaddr_in.sin_port, dw 0x901F      ; 8080 (CHANGE_ME)
+        at sockaddr_in.sin_addr, dd 0x0100007F  ; localhost (CHANGE_ME)
         at sockaddr_in.sin_zero, dd 0, 0        ; 0
     iend
     sockaddr_in_size equ $ - sockaddr
