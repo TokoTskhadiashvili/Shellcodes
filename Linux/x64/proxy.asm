@@ -1,4 +1,4 @@
-# NOT FINISHED!!!
+; NOT FINISHED!!!
 
 struc sockaddr_in
     .sin_family resw 1
