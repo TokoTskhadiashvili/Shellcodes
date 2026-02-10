@@ -1,3 +1,5 @@
+; NOT FINISHED!
+
 struc sockaddr_in
     .sin_family resw 1
     .sin_port resw 1
@@ -14,7 +16,7 @@ section .rodata
     iend
     server_sockaddr_size equ $ - server_sockaddr
 
-    buffer_size db 4096
+    buffer_size dd 4096
 
 section .data
     target_sockaddr istruc sockaddr_in
@@ -68,7 +70,7 @@ _start:
     mov rax, 0x31                       ; bind(server_sock, (sockaddr*)&server_sockaddr, sizeof(server_sockaddr))
     mov rdi, rbx                        ; server_sock
     lea rsi, [server_sockaddr]          ; (sockaddr*)&server_sockaddr
-    movzx rdx, [server_sockaddr_size]   ; sizeof(server_sockaddr)
+    mov rdx, [server_sockaddr_size]     ; sizeof(server_sockaddr)
     syscall
 
     cmp rax, -0x01
@@ -86,7 +88,7 @@ accept:
     mov rax, 0x2B                       ; accept(server_sock, (sockaddr*)&client_sockaddr, sizeof(client_sockaddr))
     mov rdi, rbx                        ; server_sock
     lea rsi, [client_sockaddr]          ; (sockaddr*)&client_sockaddr
-    movzx rdx, [client_sockaddr_size]   ; sizeof(client_sockaddr)
+    mov rdx, [client_sockaddr_size]     ; sizeof(client_sockaddr)
     syscall
 
     cmp rax, -0x01
@@ -102,17 +104,15 @@ accept:
     syscall
 
     ; Convert port from host byte order to network byte order
-    mov ax, word ptr [target_info]
+    mov ax, word [target_info]
     xchg al, ah
-    mov word ptr [target_info], ax
+    mov word [target_sockaddr + sockaddr_in.sin_port], ax
 
     ; Convert IPv4 address from host byte order to network byte order
-    mov eax, dword ptr [target_info + 2]
+    mov eax, dword [target_info + 2]
     bswap eax
-    mov dword ptr [target_info + 2], eax
-
-    mov word ptr [target_sockaddr + sockaddr_in.sin_port], word ptr [target_info]
-    mov dword ptr [target_sockaddr + sockaddr_in.sin_addr], dword ptr [target_info + 2]
+    mov dword [target_info + 2], eax
+    mov dword [target_sockaddr + sockaddr_in.sin_addr], eax
 
     mov rax, 0x29                       ; socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
     mov rdi, 0x02                       ; AF_INET
@@ -125,7 +125,7 @@ accept:
     mov rax, 0x2A                       ; connect(target_sock, (sockaddr*)&target_sockaddr, sizeof(target_sockaddr))
     mov rdi, r14                        ; target_sock
     lea rsi, [target_sockaddr]          ; (sockaddr*)&target_sockaddr
-    movzx rdx, [target_sockaddr_size]   ; sizeof(target_sockaddr)
+    mov rdx, [target_sockaddr_size]     ; sizeof(target_sockaddr)
     syscall
 
     cmp rax, -0x01
