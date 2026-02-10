@@ -1,5 +1,3 @@
-; NOT FINISHED!!!
-
 struc sockaddr_in
     .sin_family resw 1
     .sin_port resw 1
@@ -9,165 +7,235 @@ endstruc
 
 section .rodata
     server_sockaddr istruc sockaddr_in
-        at sockaddr_in.sin_family, dw 2             ; AF_INET
-        at sockaddr_in.sin_family, dw 0x901F        ; 8080 (CHANGE_ME)
-        at sockaddr_in.sin_family, dd 0x0100007F    ; localhost (CHANGE_ME)
-        at sockaddr_in.sin_zero, dd 0, 0            ; 0
+        at sockaddr_in.sin_family, dw 2         ; AF_INET
+        at sockaddr_in.sin_port, dw 0x901F      ; 8080 (CHANGE_ME)
+        at sockaddr_in.sin_addr, dd 0x00000000  ; 0.0.0.0
+        at sockaddr_in.sin_zero, dd 0, 0        ; 0
     iend
-    sockaddr_in_size equ $ - sockaddr_in
+    server_sockaddr_size equ $ - server_sockaddr
 
-    response_size dq 4096
-
-    error_target_timeout db "[ERROR]: Target timeout\n", 0
+    buffer_size db 4096
 
 section .data
-    client_sockaddr istruc sockaddr_in
-        at sockaddr_in.sin_family, dw 2             ; AF_INET
-        at sockaddr_in.sin_family, dw 0x0000        ; 0000 (DEFAULT)
-        at sockaddr_in.sin_family, dd 0x00000000    ; 0.0.0.0 (DEFAULT)
-        at sockaddr_in.sin_zero, dd 0, 0            ; 0
-    iend
-
     target_sockaddr istruc sockaddr_in
-        at sockaddr_in.sin_family, dw 2             ; AF_INET
-        at sockaddr_in.sin_family, dw 0x0000        ; 0000 (DEFAULT)
-        at sockaddr_in.sin_family, dd 0x00000000    ; 0.0.0.0 (DEFAULT)
-        at sockaddr_in.sin_zero, dd 0, 0            ; 0
+        at sockaddr_in.sin_family, dw 2         ; AF_INET
+        at sockaddr_in.sin_port, dw 0x0000      ; 0 (DEFAULT)
+        at sockaddr_in.sin_addr, dd 0x00000000  ; 0.0.0.0 (DEFAULT)
+        at sockaddr_in.sin_zero, dd 0, 0        ; 0
     iend
+    target_sockaddr_size equ $ - target_sockaddr
 
-    payload_size dq 0
+    client_sockaddr istruc sockaddr_in
+        at sockaddr_in.sin_family, dw 2         ; AF_INET
+        at sockaddr_in.sin_port, dw 0x0000      ; 0 (DEFAULT)
+        at sockaddr_in.sin_addr, dd 0x00000000  ; 0.0.0.0 (DEFAULT)
+        at sockaddr_in.sin_zero, dd 0, 0        ; 0
+    iend
+    client_sockaddr_size equ $ - client_sockaddr
+
+    target_info db 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ; PORT:IPv4
+
+    msg_conn_refused db 0x11, 0x11, 0x11, 0x00
+    msg_conn_success db 0xFF, 0xFF, 0xFF, 0x00
+    msg_inte_errored db 0xAA, 0xAA, 0xAA, 0x00
 
 section .text
     global _start
 
+clean_buffer:
+    xor rax, rax                        ; counter
+    mov rdi, [buffer_size]              ; buffer_size
+
+.loop:
+    mov byte [r12 + rax], 0x00
+    inc rax
+
+    cmp rax, rdi
+    je .done
+    jmp .loop
+.done:
+    ret
+
 _start:
     mov rax, 0x29                       ; socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
-    mov rdi, 2                          ; AF_INET
-    mov rsi, 1                          ; SOCK_STREAM
-    mov rdx, 6                          ; IPPROTO_TCP
+    mov rdi, 0x02                       ; AF_INET
+    mov rsi, 0x01                       ; SOCK_STREAM
+    mov rdx, 0x06                       ; IPPROTO_TCP
     syscall
 
-    mov rbx, rax
+    mov rbx, rax                        ; server_sock
 
-    mov rax, 0x31                       ; bind(sock, (sockaddr*)&server_addr, sizeof(server_addr))
-    mov rdi, rbx                        ; sock
-    lea rsi, [server_sockaddr]          ; (sockaddr*)&server_addr
-    mov rdx, sockaddr_in_size           ; sizeof(server_addr)
+    mov rax, 0x31                       ; bind(server_sock, (sockaddr*)&server_sockaddr, sizeof(server_sockaddr))
+    mov rdi, rbx                        ; server_sock
+    lea rsi, [server_sockaddr]          ; (sockaddr*)&server_sockaddr
+    movzx rdx, [server_sockaddr_size]   ; sizeof(server_sockaddr)
     syscall
 
-    cmp rax, -1
-    je _end
+    cmp rax, -0x01
+    je _bind_listen_error_end
 
-    mov rax, 0x32                       ; listen(sock, 0)
-    mov rdi, rbx                        ; sock
-    mov rsi, 0x00                       ; 0
+    mov rax, 0x32                       ; listen(server_sock, 1)
+    mov rdi, rbx                        ; server_sock
+    mov rsi, 0x01                       ; 1
     syscall
 
-    cmp rax, -1
-    je _end
+    cmp rax, -0x01
+    je _bind_listen_error_end
 
-_accept:
-    mov rax, 0x2B                       ; accept(sock, (sockaddr*)&client_addr, sizeof(client_addr))
-    mov rdi, rbx                        ; sock
-    lea rsi, [client_sockaddr]          ; (sockaddr*)&client_addr
-    mov rdx, sockaddr_in_size           ; sizeof(client_addr)
+accept:
+    mov rax, 0x2B                       ; accept(server_sock, (sockaddr*)&client_sockaddr, sizeof(client_sockaddr))
+    mov rdi, rbx                        ; server_sock
+    lea rsi, [client_sockaddr]          ; (sockaddr*)&client_sockaddr
+    movzx rdx, [client_sockaddr_size]   ; sizeof(client_sockaddr)
     syscall
 
-    cmp rax, -1
-    je_end
+    cmp rax, -0x01
+    je accept
 
-    mov rax, 0x2D                       ; recv(sock, &target_sockaddr.sin_addr, 4, 0)
-    mov rdi, rbx                        ; sock
-    lea rsi, [target_sockaddr.sin_addr] ; &target_sockaddr.sin_addr
-    mov rdx, 0x04                       ; 4
-    mov r10, 0x00                       ; 0
+    mov rcx, rax                        ; client_sock
+
+    mov rax, 0x02D                      ; recv(client_sock, &target_info, 6, 0)
+    mov rdi, rcx                        ; client_sock
+    lea rsi, [target_info]              ; target_info
+    mov rdx, 0x06                       ; 6
+    xor r10, r10                        ; 0
     syscall
 
-    cmp rax, -1
-    je _end
+    ; Convert port from host byte order to network byte order
+    mov ax, word ptr [target_info]
+    xchg al, ah
+    mov word ptr [target_info], ax
 
-    mov rax, 0x2D                       ; recv(sock, &target_sockaddr.sin_port, 2, 0)
-    mov rdi, rbx                        ; sock
-    lea rsi, [target_sockaddr.sin_port] ; &target_sockaddr.sin_port
-    mov rdx, 0x02                       ; 2
-    mov r10, 0x00                       ; 0
+    ; Convert IPv4 address from host byte order to network byte order
+    mov eax, dword ptr [target_info + 2]
+    bswap eax
+    mov dword ptr [target_info + 2], eax
+
+    mov word ptr [target_sockaddr + sockaddr_in.sin_port], word ptr [target_info]
+    mov dword ptr [target_sockaddr + sockaddr_in.sin_addr], dword ptr [target_info + 2]
+
+    mov rax, 0x29                       ; socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+    mov rdi, 0x02                       ; AF_INET
+    mov rsi, 0x01                       ; SOCK_STREAM
+    mov rdx, 0x06                       ; IPPROTO_TCP
     syscall
 
-    cmp rax, -1
-    je _end
+    mov r14, rax                        ; target_sock
 
-    mov rax, 0x2D                       ; recv(sock, &payload_size, 8, 0)
-    mov rdi, rbx                        ; sock
-    lea rsi, [payload_size]             ; &payload_size
-    mov rdx, 0x08                       ; 8
-    mov r10, 0x00                       ; 0
+    mov rax, 0x2A                       ; connect(target_sock, (sockaddr*)&target_sockaddr, sizeof(target_sockaddr))
+    mov rdi, r14                        ; target_sock
+    lea rsi, [target_sockaddr]          ; (sockaddr*)&target_sockaddr
+    movzx rdx, [target_sockaddr_size]   ; sizeof(target_sockaddr)
     syscall
 
-    mov rax, 0x09                       ; mmap(NULL, payload_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)
-    mov rdi, 0x00                       ; NULL
-    mov rsi, payload_size               ; payload_size
+    cmp rax, -0x01
+    je _conn_refused_error
+
+    mov rax, 0x09                       ; mmap(NULL, buffer_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)
+    xor rdi, rdi                        ; NULL
+    mov rsi, [buffer_size]              ; buffer_size
     mov rdx, 0x03                       ; PROT_READ | PROT_WRITE
     mov r10, 0x22                       ; MAP_PRIVATE | MAP_ANONYMOUS
     mov r8, -0x01                       ; -1
-    mov r9, 0x00                        ; 0
+    xor r9, r9                          ; 0
     syscall
 
-    xor r9, r9
-    mov r9, rax
+    cmp rax, -0x01
+    je _buffer_allocation_error
 
-    mov rax, 0x2D                       ; recv(sock, *payload_buffer, payload_size, 0)
-    mov rdi, rbx                        ; sock
-    mov rsi, r9                         ; *payload_buffer
-    mov rdx, payload_size               ; payload_size
-    mov r10, 0x00                       ; 0
+    mov r12, rax                        ; buffer_ptr
+
+    call clean_buffer
+
+    mov rax, 0x2C                       ; send(client_sock, &msg_conn_success, 4, 0)
+    mov rdi, r14                        ; client_sock
+    lea rsi, [msg_conn_success]         ; &msg_conn_success
+    mov rdx, 0x04                       ; 4
+    xor r10, r10                        ; 0
     syscall
 
-    mov rax, 0x29                       ; socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
-    mov rdi, 2                          ; AF_INET
-    mov rsi, 1                          ; SOCK_STREAM
-    mov rdx, 6                          ; IPPROTO_TCP
+_communication_loop:
+    mov rax, 0x02D                      ; recv(client_sock, buffer_ptr, buffer_size, 0)
+    mov rdi, rcx                        ; client_sock
+    mov rsi, r12                        ; buffer_ptr
+    mov rdx, [buffer_size]              ; buffer_size
+    xor r10, r10                        ; 0
     syscall
 
-    mov rcx, rax
-
-    mov rax, 0x2A                       ; connect(target_sock, (sockaddr*)&target_sockaddr, sizeof(target_sockaddr))
-    mov rdi, rcx                        ; target_sock
-    lea rsi, [target_sockaddr]          ; (sockaddr*)&target_sockaddr
-    mov rdx, sockaddr_in_size           ; sizeof(target_sockaddr)
+    mov rax, 0x2C                       ; send(target_sock, buffer_ptr, buffer_size, 0)
+    mov rdi, r14                        ; target_sock
+    mov rsi, r12                        ; buffer_ptr
+    mov rdx, [buffer_size]              ; buffer_size
+    xor r10, r10
     syscall
 
-    mov rax, 0x2C                       ; send(target_sock, *payload_buffer, payload_size, 0)
-    mov rdi, rcx                        ; target_sock
-    mov rsi, r9                         ; *payload_buffer
-    mov rdx, payload_size               ; payload_size
-    mov r10, 0x00                       ; 0
+    call clean_buffer
+
+    mov rax, 0x02D                      ; recv(target_sock, buffer_ptr, buffer_size, 0)
+    mov rdi, r14                        ; target_sock
+    mov rsi, r12                        ; buffer_ptr
+    mov rdx, [buffer_size]              ; buffer_size
+    xor r10, r10                        ; 0
     syscall
 
-    mov rax, 0x2D                       ; recv(target_sock, *response_buffer, response_size, 0)
-    mov rdi, rcx                        ; target_sock
-    mov rsi, r8                         ; *response_buffer
-    mov rdx, response_size              ; response_size
-    mov r10, 0x00                       ; 0
+    mov rax, 0x2C                       ; send(client_sock, buffer_ptr, buffer_size, 0)
+    mov rdi, r14                        ; client_sock
+    mov rsi, r12                        ; buffer_ptr
+    mov rdx, [buffer_size]              ; buffer_size
+    xor r10, r10                        ; 0
+    syscall
+
+    call clean_buffer
+
+jmp _communication_loop
+
+_conn_refused_error:
+    mov rax, 0x2C                       ; send(client_sock, &msg_conn_refused, 4, 0)
+    mov rdi, r14                        ; client_sock
+    lea rsi, [msg_conn_refused]         ; &msg_conn_refused
+    mov rdx, 0x04                       ; 4
+    xor r10, r10                        ; 0
+    syscall
+
+    mov rax, 0x03                       ; close(client_sock)
+    mov rdi, rcx                        ; client_sock
     syscall
 
     mov rax, 0x03                       ; close(target_sock)
-    mov rdi, rcx                        ; sock
+    mov rdi, r14                        ; target_sock
     syscall
 
-    mov rax, 0x2C                       ; send(sock, *response_buffer, response_size, 0)
-    mov rdi, rbx                        ; sock
-    mov rsi, r8                         ; *response_buffer
-    mov rdx, response_size              ; response_size
-    mov r10, 0                          ; 0
+    xor rcx, rcx
+    xor r14, r14
+
+    jmp accept
+
+_buffer_allocation_error:
+    mov rax, 0x2C                       ; send(client_sock, &msg_inte_errored, 4, 0)
+    mov rdi, r14                        ; client_sock
+    lea rsi, [msg_inte_errored]         ; &msg_inte_errored
+    mov rdx, 0x04                       ; 4
+    xor r10, r10                        ; 0
     syscall
 
-    jmp _accept
+    mov rax, 0x03                       ; close(client_sock)
+    mov rdi, rcx                        ; client_sock
+    syscall
 
-_end:
-    mov rax, 0x03                       ; close(sock)
-    mov rdi, rbx                        ; sock
+    mov rax, 0x03                       ; close(target_sock)
+    mov rdi, r14                        ; target_sock
+    syscall
+
+    xor rcx, rcx
+    xor r14, r14
+
+    jmp accept
+
+_bind_listen_error_end:
+    mov rax, 0x03                       ; close(server_sock)
+    mov rdi, rbx                        ; server_sock
     syscall
 
     mov rax, 0x3C                       ; exit(0)
-    mov rdi, 0x00                       ; 0
+    xor rdi, rdi                        ; 0
     syscall
