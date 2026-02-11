@@ -46,7 +46,7 @@ section .text
 
 clean_buffer:
     mov rdi, r12
-    mov rsi, [buffer_size]
+    mov rsi, [buffer_size]              ; RCX should be used here
     xor al, al
     rep stosb
     ret
