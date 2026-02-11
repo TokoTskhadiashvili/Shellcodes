@@ -45,17 +45,10 @@ section .text
     global _start
 
 clean_buffer:
-    xor rax, rax                        ; counter
-    mov rdi, [buffer_size]              ; buffer_size
-
-.loop:
-    mov byte [r12 + rax], 0x00
-    inc rax
-
-    cmp rax, rdi
-    je .done
-    jmp .loop
-.done:
+    mov rdi, r12
+    mov rsi, [buffer_size]
+    xor al, al
+    rep stosb
     ret
 
 _start:
