@@ -88,7 +88,7 @@ accept:
     mov rax, 0x2B                       ; accept(server_sock, (sockaddr*)&client_sockaddr, sizeof(client_sockaddr))
     mov rdi, rbx                        ; server_sock
     lea rsi, [client_sockaddr]          ; (sockaddr*)&client_sockaddr
-    mov rdx, [client_sockaddr_size]     ; sizeof(client_sockaddr)
+    lea rdx, [client_sockaddr_size]     ; sizeof(client_sockaddr)
     syscall
 
     cmp rax, -0x01
@@ -179,7 +179,7 @@ _communication_loop:
     syscall
 
     mov rax, 0x2C                       ; send(client_sock, buffer_ptr, buffer_size, 0)
-    mov rdi, r14                        ; client_sock
+    mov rdi, rcx                        ; client_sock
     mov rsi, r12                        ; buffer_ptr
     mov rdx, [buffer_size]              ; buffer_size
     xor r10, r10                        ; 0
