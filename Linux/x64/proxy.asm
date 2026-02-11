@@ -178,7 +178,7 @@ _start:
     syscall
 
     cmp rax, 0x00
-    js .reset_server
+    je .reset_server
 
     mov qword [recv_data_size], rax
 
@@ -199,7 +199,7 @@ _start:
     syscall
 
     cmp rax, 0x00
-    js .reset_server
+    je .reset_server
 
     mov qword [recv_data_size], rax
 
